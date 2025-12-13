@@ -1,0 +1,168 @@
+.camera-panel {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(10, 10, 30, 0.95);
+    border-right: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.camera-box {
+    background: #111;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid #333;
+}
+
+.camera-box img {
+    width: 100%;
+    display: block;
+}
+
+.camera-placeholder {
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 14px;
+}
+
+.camera-stats {
+    display: flex;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.stat {
+    flex: 1;
+    padding: 10px;
+    text-align: center;
+    border-right: 1px solid #333;
+}
+
+.stat:last-child {
+    border: none;
+}
+
+.stat-label {
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 1px;
+    display: block;
+    margin-bottom: 3px;
+}
+
+.stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px;
+    color: #00f0ff;
+}
+
+/* Fuzzy Panel */
+.fuzzy-panel {
+    background: rgba(255, 0, 170, 0.05);
+    border: 1px solid rgba(255, 0, 170, 0.2);
+    border-radius: 12px;
+    padding: 15px;
+    flex: 1;
+}
+
+.fuzzy-panel h4 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 12px;
+    color: #ff00aa;
+    margin-bottom: 15px;
+}
+
+.fuzzy-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.fuzzy-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fuzzy-bar span {
+    width: 60px;
+    font-size: 11px;
+    color: #888;
+}
+
+.bar-track {
+    flex: 1;
+    height: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: all 0.1s ease;
+}
+
+.bar-fill.speed {
+    background: linear-gradient(90deg, #00ff88, #00f0ff);
+}
+
+.bar-fill.steer {
+    position: absolute;
+    top: 0;
+}
+
+.bar-center {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 2px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Fuzzy Rules */
+.fuzzy-rules {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.fuzzy-rules h5 {
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.rule {
+    font-family: monospace;
+    font-size: 10px;
+    color: #ffaa00;
+    padding: 5px 8px;
+    background: rgba(255, 170, 0, 0.1);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    border-left: 2px solid #ffaa00;
+}
+
+.rule:empty {
+    display: none;
+}
+
+/* Buttons */
+.panel-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.panel-buttons .btn {
+    flex: 1;
+}

@@ -1,0 +1,71 @@
+.camera-panel {
+    background: rgba(10, 10, 30, 0.8);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 240, 255, 0.2);
+    overflow: hidden;
+}
+
+.panel-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    padding: 10px 15px;
+    background: rgba(0, 240, 255, 0.1);
+    border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+    color: #00f0ff;
+    margin: 0;
+}
+
+.camera-container {
+    background: #000;
+    aspect-ratio: 4/3;
+}
+
+.camera-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.camera-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 14px;
+}
+
+.camera-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    padding: 10px;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+.stat-icon {
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+
+.stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    color: #00f0ff;
+    font-weight: 700;
+}
+
+.stat-label {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+}
