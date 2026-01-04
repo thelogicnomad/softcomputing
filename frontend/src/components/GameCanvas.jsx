@@ -1,7 +1,3 @@
-/**
- * Polished Racing Game with Hand Gesture Controls
- * All rendering on canvas for maximum performance
- */
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import './GameCanvas.css'
@@ -13,16 +9,11 @@ const GameCanvas = forwardRef(({ controlData, onGameOver }, ref) => {
     useEffect(() => {
         const canvas = canvasRef.current
         const ctx = canvas.getContext('2d')
-
         canvas.width = 850
         canvas.height = 580
-
         gameRef.current = new Game(canvas, ctx, onGameOver)
         gameRef.current.start()
-
-        return () => {
-            if (gameRef.current) gameRef.current.stop()
-        }
+        return () => { if (gameRef.current) gameRef.current.stop() }
     }, [onGameOver])
 
     useEffect(() => {
@@ -36,9 +27,7 @@ const GameCanvas = forwardRef(({ controlData, onGameOver }, ref) => {
         }
     }, [controlData])
 
-    useImperativeHandle(ref, () => ({
-        reset: () => gameRef.current?.reset()
-    }))
+    useImperativeHandle(ref, () => ({ reset: () => gameRef.current?.reset() }))
 
     return (
         <div className="game-canvas-container">
@@ -47,7 +36,6 @@ const GameCanvas = forwardRef(({ controlData, onGameOver }, ref) => {
     )
 })
 
-// ===== GAME ENGINE =====
 class Game {
     constructor(canvas, ctx, onGameOver) {
         this.canvas = canvas
@@ -61,27 +49,20 @@ class Game {
     reset() {
         this.carX = this.W / 2
         this.speed = 0
-        this.maxSpeed = 60  // Reduced from 100
+        this.maxSpeed = 45
         this.score = 0
         this.distance = 0
         this.gameOver = false
         this.roadY = 0
         this.traffic = []
         this.spawnTime = 0
-
-        // Inputs
         this.steerIn = 0
         this.speedIn = 0
         this.gesture = 0
         this.hands = 0
-
-        // Nitro
         this.nitro = 100
         this.nitroOn = false
-
-        // Visual
         this.wheelAngle = 0
-
         this.running = false
         this.lastT = 0
     }
@@ -99,164 +80,140 @@ class Game {
         this.loop()
     }
 
-    stop() {
-        this.running = false
-    }
+    stop() { this.running = false }
 
     loop = () => {
         if (!this.running) return
-
         const now = performance.now()
         const dt = Math.min((now - this.lastT) / 1000, 0.05)
         this.lastT = now
-
-        if (!this.gameOver) {
-            this.update(dt)
-        }
+        if (!this.gameOver) this.update(dt)
         this.draw()
-
         requestAnimationFrame(this.loop)
     }
 
     update(dt) {
-        // === SPEED ===
         let target = (this.speedIn / 100) * this.maxSpeed
 
-        // Nitro boost
-        if (this.gesture === 2 && this.nitro > 0 && this.hands > 0) {
+        // NITRO: 2 hands + open gesture + fuel > 5%
+        if (this.gesture === 2 && this.nitro > 5 && this.hands >= 2) {
             this.nitroOn = true
-            this.nitro = Math.max(0, this.nitro - 25 * dt)
+            this.nitro = Math.max(0, this.nitro - 30 * dt)
             target = Math.min(this.maxSpeed * 1.5, target * 1.5)
         } else {
             this.nitroOn = false
-            this.nitro = Math.min(100, this.nitro + 8 * dt)
+            this.nitro = Math.min(100, this.nitro + (this.nitro > 0 ? 5 : 2) * dt)
         }
 
-        // Smooth acceleration
-        if (this.speed < target) {
-            this.speed += 60 * dt
-        } else {
-            this.speed -= 70 * dt
-        }
-        this.speed = Math.max(0, Math.min(this.maxSpeed * 1.5, this.speed))
+        if (this.speed < target) this.speed += 60 * dt
+        else this.speed -= 70 * dt
+        this.speed = Math.max(20, Math.min(this.maxSpeed * 1.5, this.speed))
 
-        // === STEERING ===
-        this.wheelAngle = this.steerIn * 1.5  // Reduced rotation
-        const move = (this.steerIn / 100) * 180 * dt  // Slower steering
-        this.carX += move
+        // Steering
+        this.wheelAngle = this.steerIn * 2
+        this.carX += (this.steerIn / 100) * 220 * dt
 
-        const roadL = this.W / 2 - 150
-        const roadR = this.W / 2 + 150
-        this.carX = Math.max(roadL + 30, Math.min(roadR - 30, this.carX))
+        // STRICT WALLS - wider bounds for bigger lanes
+        const roadL = this.W / 2 - 250
+        const roadR = this.W / 2 + 250
+        this.carX = Math.max(roadL + 20, Math.min(roadR - 20, this.carX))
+        if (this.carX <= roadL + 25 || this.carX >= roadR - 25) this.speed *= 0.85
 
-        // === ROAD ===
-        this.roadY += this.speed * dt * 4  // Slower road animation
+        // Road animation
+        this.roadY += this.speed * dt * 3
         if (this.roadY > 100) this.roadY -= 100
 
-        // === SCORE ===
+        // Score
         this.distance += this.speed * dt
         this.score = Math.floor(this.distance / 5)
 
-        // === TRAFFIC ===
+        // Traffic
         this.spawnTime += dt
-        if (this.spawnTime > 1.8 && this.traffic.length < 2) {
+        if (this.spawnTime > 1.2 && this.traffic.length < 4) {
             this.spawnCar()
             this.spawnTime = 0
         }
+        if (this.traffic.length === 0) this.spawnCar()
 
         for (const car of this.traffic) {
-            car.y += (this.speed - car.spd) * dt * 4  // Slower traffic
+            const rel = this.speed - car.spd
+            car.y += (rel > 0 ? rel * 3 : 3) * dt
         }
-
         this.traffic = this.traffic.filter(c => c.y < this.H + 100)
 
-        // === COLLISION ===
         this.checkHit()
     }
 
     spawnCar() {
-        const lanes = [this.W / 2 - 100, this.W / 2, this.W / 2 + 100]
-        const taken = this.traffic.filter(c => c.y < 150).map(c => c.lane)
-        const free = [0, 1, 2].filter(l => !taken.includes(l))
-
+        // EVEN WIDER LANES - 150 width each
+        const laneW = 150
+        const lanes = [
+            this.W / 2 - laneW * 2, this.W / 2 - laneW, this.W / 2,
+            this.W / 2 + laneW, this.W / 2 + laneW * 2
+        ]
+        const horizonY = this.H * 0.38
+        const taken = this.traffic.filter(c => c.y < horizonY + 80).map(c => c.lane)
+        const free = [0, 1, 2, 3, 4].filter(l => !taken.includes(l))
         if (free.length === 0) return
-
         const lane = free[Math.floor(Math.random() * free.length)]
         this.traffic.push({
-            x: lanes[lane],
-            y: -90,
-            lane,
-            spd: 25 + Math.random() * 35,
-            color: ['#e74c3c', '#3498db', '#27ae60', '#f39c12', '#9b59b6'][Math.floor(Math.random() * 5)]
+            x: lanes[lane], y: horizonY, lane,
+            spd: 15 + Math.random() * 30,
+            color: ['#e74c3c', '#3498db', '#27ae60', '#f39c12', '#9b59b6', '#e91e63', '#00bcd4'][Math.floor(Math.random() * 7)]
         })
     }
 
     checkHit() {
         const py = this.H - 120
         for (const car of this.traffic) {
-            if (car.y + 75 > py && car.y < py + 75) {
-                if (Math.abs(car.x - this.carX) < 50) {
-                    this.crash()
-                    return
-                }
+            if (car.y + 70 > py && car.y < py + 70 && Math.abs(car.x - this.carX) < 45) {
+                this.gameOver = true
+                this.onGameOver({ score: this.score, distance: Math.floor(this.distance) })
+                return
             }
         }
     }
 
-    crash() {
-        this.gameOver = true
-        this.onGameOver({ score: this.score, distance: Math.floor(this.distance) })
-    }
-
     draw() {
-        const ctx = this.ctx
-        const W = this.W
-        const H = this.H
+        const ctx = this.ctx, W = this.W, H = this.H
 
-        // === SKY ===
-        const sky = ctx.createLinearGradient(0, 0, 0, H * 0.35)
-        sky.addColorStop(0, '#0a0a1a')
-        sky.addColorStop(1, '#1a1a3a')
-        ctx.fillStyle = sky
-        ctx.fillRect(0, 0, W, H)
+        // Sky
+        ctx.fillStyle = '#0a0a1a'
+        ctx.fillRect(0, 0, W, H * 0.38)
 
         // Stars
         ctx.fillStyle = '#fff'
-        for (let i = 0; i < 50; i++) {
-            const x = (i * 97 + i * i * 17) % W
-            const y = (i * 67 + i * 11) % (H * 0.32)
+        for (let i = 0; i < 40; i++) {
             ctx.globalAlpha = 0.3 + Math.sin(performance.now() / 400 + i) * 0.3
             ctx.beginPath()
-            ctx.arc(x, y, 1 + (i % 2), 0, Math.PI * 2)
+            ctx.arc((i * 97 + i * i * 17) % W, (i * 67 + i * 11) % (H * 0.32), 1, 0, Math.PI * 2)
             ctx.fill()
         }
         ctx.globalAlpha = 1
 
-        // === GROUND ===
+        // Ground
         ctx.fillStyle = '#0f4a3a'
-        ctx.fillRect(0, H * 0.35, W, H)
+        ctx.fillRect(0, H * 0.38, W, H)
 
-        // === ROAD ===
         this.drawRoad(ctx)
 
-        // === TRAFFIC ===
+        // Traffic (with bigger lanes)
+        const horizonY = H * 0.38
         for (const car of this.traffic) {
-            this.drawCar(ctx, car.x, car.y, car.color, false)
+            const progress = (car.y - horizonY) / (H - horizonY)
+            const scale = Math.max(0.2, Math.min(1, progress))
+            const laneOffset = (car.lane - 2) * (150 * scale)  // Match wider lanes
+            if (car.y > horizonY && scale > 0.15) {
+                this.drawTrafficCar(ctx, W / 2 + laneOffset, car.y, car.color, scale)
+            }
         }
 
-        // === PLAYER ===
-        this.drawCar(ctx, this.carX, H - 120, '#1abc9c', true)
-
-        // === HUD (on canvas) ===
+        // Player
+        this.drawPlayerCar(ctx, this.carX, H - 120)
         this.drawHUD(ctx)
-
-        // === STEERING WHEEL ===
         this.drawWheel(ctx)
-
-        // === NITRO BAR ===
         this.drawNitro(ctx)
 
-        // Nitro screen effect
         if (this.nitroOn) {
             ctx.fillStyle = 'rgba(255,130,0,0.12)'
             ctx.fillRect(0, 0, W, H)
@@ -264,265 +221,150 @@ class Game {
     }
 
     drawRoad(ctx) {
-        const W = this.W
-        const H = this.H
-        const roadW = 320
-        const cx = W / 2
-        const top = H * 0.35
+        const W = this.W, H = this.H, horizonY = H * 0.38
 
-        // Road surface
-        ctx.fillStyle = '#2c3e50'
-        ctx.fillRect(cx - roadW / 2, top, roadW, H)
+        for (let i = 0; i < 30; i++) {
+            const t1 = i / 30, t2 = (i + 1) / 30
+            const s1 = Math.pow(1 - t1, 1.3), s2 = Math.pow(1 - t2, 1.3)
+            const y1 = H - (H - horizonY) * t1, y2 = H - (H - horizonY) * t2
+            const rw1 = 780 * s1, rw2 = 780 * s2  // Wider road for wider lanes
+            const cx = W / 2
+            const stripe = Math.floor((i + this.roadY / 8) % 2)
 
-        // Edge lines
-        ctx.fillStyle = '#ffffff'
-        ctx.fillRect(cx - roadW / 2 - 4, top, 4, H)
-        ctx.fillRect(cx + roadW / 2, top, 4, H)
+            // Grass
+            ctx.fillStyle = stripe === 0 ? '#1a5a4a' : '#165040'
+            ctx.fillRect(0, y2, W, y1 - y2 + 1)
 
-        // Lane markers (moving)
-        ctx.fillStyle = '#ffffff'
-        for (let y = top - this.roadY; y < H; y += 100) {
-            ctx.fillRect(cx - 55, y, 5, 50)
-            ctx.fillRect(cx + 50, y, 5, 50)
-        }
+            // Road
+            ctx.fillStyle = '#3a4a5a'
+            ctx.beginPath()
+            ctx.moveTo(cx - rw1 / 2, y1)
+            ctx.lineTo(cx - rw2 / 2, y2)
+            ctx.lineTo(cx + rw2 / 2, y2)
+            ctx.lineTo(cx + rw1 / 2, y1)
+            ctx.fill()
 
-        // Center line (yellow)
-        ctx.fillStyle = '#f1c40f'
-        for (let y = top - this.roadY; y < H; y += 70) {
-            ctx.fillRect(cx - 2.5, y, 5, 35)
+            // Walls
+            if (s1 > 0.1) {
+                const ww = 10 * s1
+                ctx.fillStyle = stripe === 0 ? '#cc0000' : '#ffffff'
+                ctx.beginPath()
+                ctx.moveTo(cx - rw1 / 2 - ww, y1)
+                ctx.lineTo(cx - rw2 / 2 - ww * s2 / s1, y2)
+                ctx.lineTo(cx - rw2 / 2, y2)
+                ctx.lineTo(cx - rw1 / 2, y1)
+                ctx.fill()
+                ctx.beginPath()
+                ctx.moveTo(cx + rw1 / 2, y1)
+                ctx.lineTo(cx + rw2 / 2, y2)
+                ctx.lineTo(cx + rw2 / 2 + ww * s2 / s1, y2)
+                ctx.lineTo(cx + rw1 / 2 + ww, y1)
+                ctx.fill()
+            }
+
+            // Lanes
+            if (stripe === 0 && s1 > 0.15) {
+                ctx.fillStyle = '#fff'
+                const lw = 2 * s1, ls = rw1 / 5
+                for (let l = 1; l <= 4; l++) {
+                    const o1 = -rw1 / 2 + l * ls, o2 = -rw2 / 2 + l * (rw2 / 5)
+                    ctx.beginPath()
+                    ctx.moveTo(cx + o1 - lw, y1)
+                    ctx.lineTo(cx + o2 - lw, y2)
+                    ctx.lineTo(cx + o2 + lw, y2)
+                    ctx.lineTo(cx + o1 + lw, y1)
+                    ctx.fill()
+                }
+            }
         }
     }
 
-    drawCar(ctx, x, y, color, isPlayer) {
-        const w = 50
-        const h = 80
+    drawTrafficCar(ctx, x, y, color, scale) {
+        const w = 42 * scale
+        const h = 68 * scale
+        if (w < 10) return
 
         ctx.save()
         ctx.translate(x, y)
 
-        if (isPlayer) {
-            ctx.rotate((this.steerIn / 100) * 0.12)
+        // Enhanced shadow with blur
+        ctx.fillStyle = `rgba(0,0,0,${0.25 + scale * 0.15})`
+        ctx.beginPath()
+        ctx.ellipse(0, h / 2 + 4 * scale, w / 2 + 3 * scale, 6 * scale, 0, 0, Math.PI * 2)
+        ctx.fill()
+
+        // Wheels (visible on sides)
+        if (scale > 0.25) {
+            ctx.fillStyle = '#1a1a1a'
+            // Front wheels
+            ctx.fillRect(-w / 2 - 3 * scale, -h / 2 + 8 * scale, 5 * scale, 14 * scale)
+            ctx.fillRect(w / 2 - 2 * scale, -h / 2 + 8 * scale, 5 * scale, 14 * scale)
+            // Rear wheels
+            ctx.fillRect(-w / 2 - 3 * scale, h / 2 - 20 * scale, 5 * scale, 14 * scale)
+            ctx.fillRect(w / 2 - 2 * scale, h / 2 - 20 * scale, 5 * scale, 14 * scale)
         }
 
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.35)'
+        // Body with gradient
+        const bodyGrad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0)
+        bodyGrad.addColorStop(0, this.darken(color, 30))
+        bodyGrad.addColorStop(0.3, color)
+        bodyGrad.addColorStop(0.7, color)
+        bodyGrad.addColorStop(1, this.darken(color, 30))
+        ctx.fillStyle = bodyGrad
         ctx.beginPath()
-        ctx.ellipse(0, h / 2 + 6, w / 2 + 5, 10, 0, 0, Math.PI * 2)
+        ctx.roundRect(-w / 2, -h / 2, w, h, 5 * scale)
         ctx.fill()
 
-        // Body
-        ctx.fillStyle = color
+        // Rear window
+        ctx.fillStyle = 'rgba(60,100,140,0.7)'
         ctx.beginPath()
-        ctx.roundRect(-w / 2, -h / 2, w, h, 6)
+        ctx.roundRect(-w / 2 + 4 * scale, -h / 2 + 5 * scale, w - 8 * scale, h * 0.28, 3 * scale)
         ctx.fill()
 
-        // Windshield
-        ctx.fillStyle = isPlayer ? 'rgba(0,220,255,0.5)' : 'rgba(100,150,200,0.6)'
+        // Roof (darker)
+        ctx.fillStyle = this.darken(color, 40)
         ctx.beginPath()
-        ctx.roundRect(-w / 2 + 6, -h / 2 + 6, w - 12, h * 0.28, 3)
+        ctx.roundRect(-w / 2 + 3 * scale, -h / 2 + h * 0.22, w - 6 * scale, h * 0.32, 3 * scale)
         ctx.fill()
 
-        // Roof
-        ctx.fillStyle = isPlayer ? '#0e9b8a' : this.darken(color, 25)
-        ctx.beginPath()
-        ctx.roundRect(-w / 2 + 4, -h / 2 + h * 0.25, w - 8, h * 0.32, 3)
-        ctx.fill()
-
-        // Wheels
-        ctx.fillStyle = '#1a1a1a'
-        ctx.fillRect(-w / 2 - 4, -h / 2 + 12, 7, 20)
-        ctx.fillRect(w / 2 - 3, -h / 2 + 12, 7, 20)
-        ctx.fillRect(-w / 2 - 4, h / 2 - 30, 7, 20)
-        ctx.fillRect(w / 2 - 3, h / 2 - 30, 7, 20)
-
-        if (isPlayer) {
-            // Headlights
-            ctx.fillStyle = '#ffffaa'
-            ctx.shadowColor = '#ffff00'
-            ctx.shadowBlur = 12
-            ctx.fillRect(-w / 2 + 6, -h / 2 - 4, 12, 5)
-            ctx.fillRect(w / 2 - 18, -h / 2 - 4, 12, 5)
-            ctx.shadowBlur = 0
-
-            // Neon outline
-            ctx.strokeStyle = '#00ffff'
-            ctx.lineWidth = 2
-            ctx.shadowColor = '#00ffff'
-            ctx.shadowBlur = 12
+        // Roof highlight (shine)
+        if (scale > 0.3) {
+            ctx.fillStyle = 'rgba(255,255,255,0.15)'
             ctx.beginPath()
-            ctx.roundRect(-w / 2, -h / 2, w, h, 6)
-            ctx.stroke()
-            ctx.shadowBlur = 0
+            ctx.roundRect(-w / 2 + 6 * scale, -h / 2 + h * 0.25, w - 12 * scale, h * 0.1, 2 * scale)
+            ctx.fill()
+        }
 
-            // Nitro flames
-            if (this.nitroOn) {
-                for (let i = 0; i < 2; i++) {
-                    const fh = 30 + Math.random() * 30
-                    ctx.fillStyle = `rgba(255,${100 + Math.random() * 80},0,0.9)`
-                    ctx.shadowColor = '#ff4400'
-                    ctx.shadowBlur = 18
-                    ctx.beginPath()
-                    ctx.moveTo(-12 + i * 16, h / 2)
-                    ctx.lineTo(-4 + i * 16, h / 2 + fh)
-                    ctx.lineTo(4 + i * 16, h / 2)
-                    ctx.fill()
-                }
-                ctx.shadowBlur = 0
-            }
-        } else {
-            // Taillights
-            ctx.fillStyle = '#e74c3c'
+        // Taillights with glow
+        if (scale > 0.25) {
+            ctx.fillStyle = '#ff3333'
             ctx.shadowColor = '#ff0000'
-            ctx.shadowBlur = 6
-            ctx.fillRect(-w / 2 + 4, h / 2 - 8, 10, 5)
-            ctx.fillRect(w / 2 - 14, h / 2 - 8, 10, 5)
+            ctx.shadowBlur = 8 * scale
+            // Left taillight
+            ctx.beginPath()
+            ctx.roundRect(-w / 2 + 3 * scale, h / 2 - 7 * scale, 8 * scale, 4 * scale, 1 * scale)
+            ctx.fill()
+            // Right taillight
+            ctx.beginPath()
+            ctx.roundRect(w / 2 - 11 * scale, h / 2 - 7 * scale, 8 * scale, 4 * scale, 1 * scale)
+            ctx.fill()
             ctx.shadowBlur = 0
+
+            // Brake light bar (center)
+            ctx.fillStyle = '#cc0000'
+            ctx.fillRect(-w / 4, h / 2 - 5 * scale, w / 2, 2 * scale)
+        }
+
+        // Subtle outline
+        if (scale > 0.4) {
+            ctx.strokeStyle = 'rgba(0,0,0,0.3)'
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.roundRect(-w / 2, -h / 2, w, h, 5 * scale)
+            ctx.stroke()
         }
 
         ctx.restore()
-    }
-
-    drawHUD(ctx) {
-        const W = this.W
-
-        // Speedometer
-        ctx.fillStyle = 'rgba(0,0,0,0.8)'
-        ctx.beginPath()
-        ctx.roundRect(W - 140, 15, 120, 70, 10)
-        ctx.fill()
-        ctx.strokeStyle = '#2ecc71'
-        ctx.lineWidth = 2
-        ctx.stroke()
-
-        ctx.fillStyle = '#2ecc71'
-        ctx.font = 'bold 36px Orbitron, monospace'
-        ctx.textAlign = 'center'
-        ctx.fillText(Math.floor(this.speed), W - 80, 55)
-        ctx.font = '12px Arial'
-        ctx.fillStyle = '#888'
-        ctx.fillText('KM/H', W - 80, 72)
-
-        // Score
-        ctx.fillStyle = 'rgba(0,0,0,0.8)'
-        ctx.beginPath()
-        ctx.roundRect(20, 15, 130, 70, 10)
-        ctx.fill()
-        ctx.strokeStyle = '#f39c12'
-        ctx.lineWidth = 2
-        ctx.stroke()
-
-        ctx.fillStyle = '#888'
-        ctx.font = '11px Arial'
-        ctx.textAlign = 'center'
-        ctx.fillText('SCORE', 85, 35)
-        ctx.fillStyle = '#f39c12'
-        ctx.font = 'bold 28px Orbitron, monospace'
-        ctx.fillText(this.score.toLocaleString(), 85, 65)
-
-        // Distance
-        ctx.fillStyle = '#666'
-        ctx.font = '11px Arial'
-        ctx.textAlign = 'left'
-        ctx.fillText(`Distance: ${Math.floor(this.distance)}m`, 25, 100)
-    }
-
-    drawWheel(ctx) {
-        const cx = 100
-        const cy = this.H - 100
-        const r = 60
-
-        ctx.save()
-        ctx.translate(cx, cy)
-        ctx.rotate(this.wheelAngle * Math.PI / 180)
-
-        // Outer ring
-        ctx.strokeStyle = this.hands > 0 ? '#2ecc71' : '#555'
-        ctx.lineWidth = 12
-        ctx.beginPath()
-        ctx.arc(0, 0, r, 0, Math.PI * 2)
-        ctx.stroke()
-
-        // Inner ring
-        ctx.strokeStyle = this.hands > 0 ? '#27ae60' : '#444'
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.arc(0, 0, r - 18, 0, Math.PI * 2)
-        ctx.stroke()
-
-        // Spokes
-        ctx.strokeStyle = '#333'
-        ctx.lineWidth = 7
-        ctx.lineCap = 'round'
-        ctx.beginPath()
-        ctx.moveTo(-r + 15, 0)
-        ctx.lineTo(r - 15, 0)
-        ctx.moveTo(0, -r + 15)
-        ctx.lineTo(0, r - 15)
-        ctx.stroke()
-
-        // Center
-        ctx.fillStyle = '#222'
-        ctx.beginPath()
-        ctx.arc(0, 0, 18, 0, Math.PI * 2)
-        ctx.fill()
-
-        // Top marker
-        ctx.fillStyle = '#e74c3c'
-        ctx.beginPath()
-        ctx.arc(0, -r + 6, 7, 0, Math.PI * 2)
-        ctx.fill()
-
-        ctx.restore()
-
-        // Labels
-        ctx.fillStyle = this.hands > 0 ? '#2ecc71' : '#888'
-        ctx.font = 'bold 12px Arial'
-        ctx.textAlign = 'center'
-        ctx.fillText(this.hands > 0 ? '✓ HANDS OK' : 'SHOW HANDS', cx, cy + r + 22)
-        ctx.fillStyle = '#aaa'
-        ctx.font = '11px Arial'
-        ctx.fillText(`${Math.round(this.wheelAngle)}°`, cx, cy + r + 38)
-    }
-
-    drawNitro(ctx) {
-        const x = this.W - 180
-        const y = this.H - 55
-        const w = 150
-        const h = 28
-
-        // Background
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'
-        ctx.beginPath()
-        ctx.roundRect(x, y, w, h, 6)
-        ctx.fill()
-
-        // Border
-        ctx.strokeStyle = this.nitroOn ? '#ff6600' : '#555'
-        ctx.lineWidth = 2
-        ctx.stroke()
-
-        // Fill
-        const fw = (this.nitro / 100) * (w - 6)
-        const grad = ctx.createLinearGradient(x, 0, x + w, 0)
-        grad.addColorStop(0, '#e74c3c')
-        grad.addColorStop(0.5, '#f39c12')
-        grad.addColorStop(1, '#f1c40f')
-        ctx.fillStyle = this.nitroOn ? '#ff6600' : grad
-        ctx.beginPath()
-        ctx.roundRect(x + 3, y + 3, fw, h - 6, 4)
-        ctx.fill()
-
-        // Label
-        ctx.fillStyle = '#fff'
-        ctx.font = 'bold 12px Arial'
-        ctx.textAlign = 'center'
-        ctx.fillText('⚡ NITRO', x + w / 2, y + h / 2 + 4)
-
-        if (this.nitroOn) {
-            ctx.fillStyle = '#ff6600'
-            ctx.font = 'bold 11px Arial'
-            ctx.fillText('BOOST!', x + w / 2, y - 8)
-        }
     }
 
     darken(color, amt) {
@@ -531,6 +373,163 @@ class Game {
         const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - amt)
         const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - amt)
         return `rgb(${r},${g},${b})`
+    }
+
+    drawPlayerCar(ctx, x, y) {
+        const w = 40, h = 65
+        ctx.save()
+        ctx.translate(x, y)
+        // NO ROTATION - car stays straight in all lanes
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'
+        ctx.beginPath()
+        ctx.ellipse(0, h / 2 + 5, w / 2 + 4, 8, 0, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#1abc9c'
+        ctx.beginPath()
+        ctx.roundRect(-w / 2, -h / 2, w, h, 5)
+        ctx.fill()
+        ctx.fillStyle = 'rgba(0,220,255,0.5)'
+        ctx.beginPath()
+        ctx.roundRect(-w / 2 + 5, -h / 2 + 5, w - 10, h * 0.26, 3)
+        ctx.fill()
+        ctx.fillStyle = '#0e9b8a'
+        ctx.beginPath()
+        ctx.roundRect(-w / 2 + 3, -h / 2 + h * 0.22, w - 6, h * 0.3, 3)
+        ctx.fill()
+        ctx.fillStyle = '#1a1a1a'
+        ctx.fillRect(-w / 2 - 3, -h / 2 + 10, 6, 18)
+        ctx.fillRect(w / 2 - 3, -h / 2 + 10, 6, 18)
+        ctx.fillRect(-w / 2 - 3, h / 2 - 26, 6, 18)
+        ctx.fillRect(w / 2 - 3, h / 2 - 26, 6, 18)
+        ctx.fillStyle = '#ffffaa'
+        ctx.shadowColor = '#ffff00'
+        ctx.shadowBlur = 10
+        ctx.fillRect(-w / 2 + 5, -h / 2 - 3, 10, 4)
+        ctx.fillRect(w / 2 - 15, -h / 2 - 3, 10, 4)
+        ctx.shadowBlur = 0
+        ctx.strokeStyle = '#00ffff'
+        ctx.lineWidth = 2
+        ctx.shadowColor = '#00ffff'
+        ctx.shadowBlur = 10
+        ctx.beginPath()
+        ctx.roundRect(-w / 2, -h / 2, w, h, 5)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        if (this.nitroOn) {
+            for (let i = 0; i < 2; i++) {
+                ctx.fillStyle = `rgba(255,${100 + Math.random() * 80},0,0.9)`
+                ctx.shadowColor = '#ff4400'
+                ctx.shadowBlur = 15
+                ctx.beginPath()
+                ctx.moveTo(-10 + i * 14, h / 2)
+                ctx.lineTo(-3 + i * 14, h / 2 + 25 + Math.random() * 25)
+                ctx.lineTo(4 + i * 14, h / 2)
+                ctx.fill()
+            }
+            ctx.shadowBlur = 0
+        }
+        ctx.restore()
+    }
+
+    drawHUD(ctx) {
+        const W = this.W
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'
+        ctx.beginPath()
+        ctx.roundRect(W - 130, 15, 110, 65, 8)
+        ctx.fill()
+        ctx.strokeStyle = '#2ecc71'
+        ctx.lineWidth = 2
+        ctx.stroke()
+        ctx.fillStyle = '#2ecc71'
+        ctx.font = 'bold 32px monospace'
+        ctx.textAlign = 'center'
+        ctx.fillText(Math.floor(this.speed), W - 75, 52)
+        ctx.font = '11px Arial'
+        ctx.fillStyle = '#888'
+        ctx.fillText('KM/H', W - 75, 68)
+
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'
+        ctx.beginPath()
+        ctx.roundRect(20, 15, 120, 65, 8)
+        ctx.fill()
+        ctx.strokeStyle = '#f39c12'
+        ctx.lineWidth = 2
+        ctx.stroke()
+        ctx.fillStyle = '#888'
+        ctx.font = '10px Arial'
+        ctx.fillText('SCORE', 80, 32)
+        ctx.fillStyle = '#f39c12'
+        ctx.font = 'bold 26px monospace'
+        ctx.fillText(this.score.toLocaleString(), 80, 60)
+
+        ctx.fillStyle = '#666'
+        ctx.font = '10px Arial'
+        ctx.textAlign = 'left'
+        ctx.fillText(`Distance: ${Math.floor(this.distance)}m`, 22, 95)
+    }
+
+    drawWheel(ctx) {
+        const cx = 90, cy = this.H - 90, r = 55
+        ctx.save()
+        ctx.translate(cx, cy)
+        ctx.rotate(this.wheelAngle * Math.PI / 180)
+        ctx.strokeStyle = this.hands > 0 ? '#2ecc71' : '#555'
+        ctx.lineWidth = 10
+        ctx.beginPath()
+        ctx.arc(0, 0, r, 0, Math.PI * 2)
+        ctx.stroke()
+        ctx.strokeStyle = '#333'
+        ctx.lineWidth = 6
+        ctx.beginPath()
+        ctx.moveTo(-r + 12, 0)
+        ctx.lineTo(r - 12, 0)
+        ctx.moveTo(0, -r + 12)
+        ctx.lineTo(0, r - 12)
+        ctx.stroke()
+        ctx.fillStyle = '#222'
+        ctx.beginPath()
+        ctx.arc(0, 0, 15, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#e74c3c'
+        ctx.beginPath()
+        ctx.arc(0, -r + 5, 6, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.restore()
+        ctx.fillStyle = this.hands > 0 ? '#2ecc71' : '#888'
+        ctx.font = 'bold 11px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText(this.hands > 0 ? '✓ HANDS OK' : 'SHOW HANDS', cx, cy + r + 18)
+        ctx.fillStyle = '#aaa'
+        ctx.font = '10px Arial'
+        ctx.fillText(`${Math.round(this.wheelAngle)}°`, cx, cy + r + 32)
+    }
+
+    drawNitro(ctx) {
+        const x = this.W - 160, y = this.H - 50, w = 130, h = 24
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'
+        ctx.beginPath()
+        ctx.roundRect(x, y, w, h, 5)
+        ctx.fill()
+        ctx.strokeStyle = this.nitroOn ? '#ff6600' : '#555'
+        ctx.lineWidth = 2
+        ctx.stroke()
+        const fw = (this.nitro / 100) * (w - 4)
+        const grad = ctx.createLinearGradient(x, 0, x + w, 0)
+        grad.addColorStop(0, '#e74c3c')
+        grad.addColorStop(0.5, '#f39c12')
+        grad.addColorStop(1, '#f1c40f')
+        ctx.fillStyle = this.nitro <= 5 ? '#666' : (this.nitroOn ? '#ff6600' : grad)
+        ctx.beginPath()
+        ctx.roundRect(x + 2, y + 2, fw, h - 4, 3)
+        ctx.fill()
+        ctx.fillStyle = '#fff'
+        ctx.font = 'bold 11px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText(this.nitro <= 5 ? '⚡ EMPTY' : '⚡ NITRO', x + w / 2, y + h / 2 + 4)
+        if (this.nitroOn) {
+            ctx.fillStyle = '#ff6600'
+            ctx.fillText('BOOST!', x + w / 2, y - 6)
+        }
     }
 }
 

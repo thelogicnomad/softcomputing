@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+
 import GameCanvas from './components/GameCanvas'
 import CameraPanel from './components/CameraPanel'
 import StartScreen from './components/StartScreen'
